@@ -1,0 +1,119 @@
+name: Release — Build EXE & Publish
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+# Hanya satu release yang jalan di saat bersamaan
+concurrency:
+  group: release
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  # Job 1: Test dulu — pastikan CI hijau
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov ruff redis python-dotenv python-docx
+
+      - name: Install project
+        run: pip install -e .
+
+      - name: Run tests
+        run: python -m pytest -q --tb=short
+
+  # Job 2: Build EXE + Release
+  release:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller PySide6 faster-whisper redis python-dotenv python-docx
+
+      - name: Install project
+        run: pip install -e .
+
+      - name: Compute version tag
+        id: version
+        shell: bash
+        run: |
+          VERSION="v$(date +%Y.%m.%d).${{ github.run_number }}-$(git rev-parse --short HEAD)"
+          echo "tag=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Build EXE with PyInstaller
+        run: |
+          pyinstaller --onefile --name TranskripWawancara --icon app/resources/icon.ico --add-data "app;app" --hidden-import PySide6 --hidden-import faster_whisper --hidden-import redis --hidden-import docx app/main.py
+        continue-on-error: true
+
+      - name: Build EXE (fallback tanpa icon)
+        if: failure() || !hashFiles('dist/TranskripWawancara.exe')
+        run: |
+          pyinstaller --onefile --name TranskripWawancara --add-data "app;app" --hidden-import PySide6 --hidden-import faster_whisper --hidden-import redis --hidden-import docx app/main.py
+
+      - name: Create ZIP & SHA256
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist\TranskripWawancara.exe -DestinationPath dist\TranskripWawancara.zip
+          $hash = (Get-FileHash dist\TranskripWawancara.exe -Algorithm SHA256).Hash
+          "$hash  TranskripWawancara.exe" | Out-File dist\TranskripWawancara.sha256 -Encoding utf8
+
+      - name: Create Git Tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag ${{ steps.version.outputs.tag }}
+          git push origin ${{ steps.version.outputs.tag }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "Release ${{ steps.version.outputs.tag }}"
+          body: |
+            ## Transkrip Wawancara — Auto Release
+
+            **Version:** `${{ steps.version.outputs.tag }}`
+
+            ### Download
+            - `TranskripWawancara.exe` — Portable Windows 10/11
+            - `TranskripWawancara.zip` — ZIP archive
+            - `TranskripWawancara.sha256` — Checksum SHA256
+
+            ### Fitur
+            - 🎙️ Transkrip audio/video ke teks (offline, faster-whisper)
+            - 📄 Export: TXT, MD, SRT, VTT, JSON, DOCX
+            - 🗄️ Redis caching (opsional)
+            - 🖥️ UI desktop + CLI batch mode
+          files: |
+            dist/TranskripWawancara.exe
+            dist/TranskripWawancara.zip
+            dist/TranskripWawancara.sha256
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
