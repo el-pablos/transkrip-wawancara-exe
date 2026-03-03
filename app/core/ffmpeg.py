@@ -140,7 +140,20 @@ def convert_to_wav(
         "-c:a", "pcm_s16le",
         str(output_path),
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+
+    # Timeout dinamis berdasarkan durasi file, biar file panjang ga keputus
+    try:
+        duration = probe_duration(input_path)
+    except Exception:
+        duration = 0.0
+
+    if duration > 0:
+        timeout_seconds = max(600, int(duration * 3) + 120)
+    else:
+        # Fallback besar (6 jam) kalau durasi ga bisa dideteksi
+        timeout_seconds = 21600
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_seconds)
     if result.returncode != 0:
         raise RuntimeError(f"FFmpeg convert gagal: {result.stderr[:500]}")
 
