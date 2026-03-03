@@ -201,3 +201,110 @@ class TestPipelineSmoke:
             engine=FillerEngine(),
         )
         assert result["segments_count"] == 1
+
+    @patch("app.core.pipeline.cleanup_chunks")
+    @patch("app.core.pipeline.iterate_audio_chunks")
+    @patch("app.core.pipeline.should_chunk", return_value=True)
+    @patch("app.core.pipeline.convert_to_wav")
+    @patch("app.core.pipeline.probe_duration", return_value=7200.0)
+    def test_chunking_pipeline(
+        self,
+        mock_probe: MagicMock,
+        mock_convert: MagicMock,
+        mock_should_chunk: MagicMock,
+        mock_iterate: MagicMock,
+        mock_cleanup: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Pipeline chunking harus dipanggil untuk file panjang dan merge segmen."""
+        fake = tmp_path / "input.wav"
+        fake.write_bytes(b"RIFF" + b"\x00" * 100)
+        mock_convert.return_value = fake
+
+        # Simulate 3 chunks
+        chunk0 = tmp_path / "chunk_0000.wav"
+        chunk1 = tmp_path / "chunk_0001.wav"
+        chunk2 = tmp_path / "chunk_0002.wav"
+        chunk0.write_bytes(b"RIFF" + b"\x00" * 50)
+        chunk1.write_bytes(b"RIFF" + b"\x00" * 50)
+        chunk2.write_bytes(b"RIFF" + b"\x00" * 50)
+        mock_iterate.return_value = [chunk0, chunk1, chunk2]
+
+        progress_stages: list[tuple[str, float]] = []
+
+        def on_progress(stage: str, progress: float) -> None:
+            progress_stages.append((stage, progress))
+
+        result = run_pipeline(
+            input_path=fake,
+            output_dir=tmp_path / "output",
+            formats=["txt"],
+            use_cache=False,
+            engine=MockEngine(),
+            progress_callback=on_progress,
+        )
+
+        # MockEngine returns 3 segments per chunk, 3 chunks = 9 segments
+        assert result["segments_count"] == 9
+        assert result["duration"] == 7200.0
+        assert "preview_text" in result
+
+        # Progress should be called per chunk
+        chunk_stages = [s for s in progress_stages if "chunk" in s[0].lower()]
+        assert len(chunk_stages) == 3
+
+        mock_cleanup.assert_called_once()
+
+    @patch("app.core.pipeline.convert_to_wav")
+    @patch("app.core.pipeline.probe_duration", return_value=7.0)
+    def test_txt_clean_output_default(
+        self,
+        mock_probe: MagicMock,
+        mock_convert: MagicMock,
+        fake_audio: Path,
+        tmp_path: Path,
+    ) -> None:
+        """Default TXT harus bersih tanpa timestamp dan speaker."""
+        mock_convert.return_value = fake_audio
+
+        output_dir = tmp_path / "output"
+        result = run_pipeline(
+            input_path=fake_audio,
+            output_dir=output_dir,
+            formats=["txt"],
+            use_cache=False,
+            engine=MockEngine(),
+        )
+
+        txt_file = Path(result["exported_files"][0])
+        content = txt_file.read_text(encoding="utf-8")
+        assert "[00:00]" not in content
+        assert "[Speaker" not in content
+        assert "Halo ini tes." in content
+        assert result.get("preview_text")
+
+    @patch("app.core.pipeline.convert_to_wav")
+    @patch("app.core.pipeline.probe_duration", return_value=7.0)
+    def test_txt_with_timestamps(
+        self,
+        mock_probe: MagicMock,
+        mock_convert: MagicMock,
+        fake_audio: Path,
+        tmp_path: Path,
+    ) -> None:
+        """TXT dengan opsi timestamp harus sertakan [MM:SS]."""
+        mock_convert.return_value = fake_audio
+
+        output_dir = tmp_path / "output"
+        result = run_pipeline(
+            input_path=fake_audio,
+            output_dir=output_dir,
+            formats=["txt"],
+            use_cache=False,
+            engine=MockEngine(),
+            txt_include_timestamps=True,
+        )
+
+        txt_file = Path(result["exported_files"][0])
+        content = txt_file.read_text(encoding="utf-8")
+        assert "[00:00]" in content

@@ -53,19 +53,27 @@ class TestTxtExporter:
         assert out.exists()
         assert out.suffix == ".txt"
 
-    def test_contains_timestamp(self, tmp_path: Path, sample_result: TranscriptResult) -> None:
+    def test_default_clean_output(self, tmp_path: Path, sample_result: TranscriptResult) -> None:
+        """Default: teks bersih tanpa timestamp dan speaker."""
         out = export_txt(sample_result, tmp_path / "out.txt")
+        content = out.read_text(encoding="utf-8")
+        assert "[00:00]" not in content
+        assert "[Speaker" not in content
+        assert "Halo selamat pagi." in content
+
+    def test_contains_timestamp_when_enabled(self, tmp_path: Path, sample_result: TranscriptResult) -> None:
+        out = export_txt(sample_result, tmp_path / "out.txt", include_timestamps=True)
         content = out.read_text(encoding="utf-8")
         assert "[00:00]" in content
         assert "Halo selamat pagi." in content
 
-    def test_contains_speaker(self, tmp_path: Path, sample_result: TranscriptResult) -> None:
-        out = export_txt(sample_result, tmp_path / "out.txt")
+    def test_contains_speaker_when_enabled(self, tmp_path: Path, sample_result: TranscriptResult) -> None:
+        out = export_txt(sample_result, tmp_path / "out.txt", include_speaker=True)
         content = out.read_text(encoding="utf-8")
         assert "[Speaker 1]" in content
 
     def test_no_speaker(self, tmp_path: Path, sample_no_speaker: TranscriptResult) -> None:
-        out = export_txt(sample_no_speaker, tmp_path / "out.txt")
+        out = export_txt(sample_no_speaker, tmp_path / "out.txt", include_speaker=True)
         content = out.read_text(encoding="utf-8")
         assert "[Speaker" not in content
 
