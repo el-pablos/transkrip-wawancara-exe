@@ -1,0 +1,102 @@
+# ============================================================
+# .gitignore — Transkrip Wawancara (Python / Windows)
+# ============================================================
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.egg-info/
+*.egg
+dist/
+build/
+*.spec
+*.manifest
+*.whl
+
+# ---------- Virtual Environment ----------
+.venv/
+venv/
+env/
+ENV/
+
+# ---------- IDE ----------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# ---------- Secrets & Environment (WAJIB) ----------
+.env
+.env.*
+!.env.example
+secrets.*
+*.pem
+*.key
+*.credentials
+gh_token*
+token*
+
+# ---------- Config lokal (boleh ada secret) ----------
+config.local.json
+
+# ---------- Logs ----------
+logs/
+*.log
+
+# ---------- OS junk ----------
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# ---------- Build artifacts ----------
+*.exe
+*.msi
+*.zip
+*.tar.gz
+*.sha256
+
+# ---------- Redis dump ----------
+dump.rdb
+
+# ---------- FFmpeg bundle (jangan commit binary besar) ----------
+tools/ffmpeg/*.exe
+tools/ffmpeg/*.dll
+
+# ---------- Audio/video test files besar ----------
+tests/fixtures/*.wav
+tests/fixtures/*.mp3
+tests/fixtures/*.m4a
+tests/fixtures/*.ogg
+tests/fixtures/*.flac
+tests/fixtures/*.wma
+tests/fixtures/*.mp4
+tests/fixtures/*.mkv
+tests/fixtures/*.mov
+tests/fixtures/*.avi
+tests/fixtures/*.webm
+
+# ---------- Output transkrip ----------
+output/
+*.txt
+!requirements.txt
+!README.txt
+
+# ---------- Coverage ----------
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# ---------- pytest ----------
+.pytest_cache/
+
+# ---------- mypy ----------
+.mypy_cache/
+
+# ---------- ruff ----------
+.ruff_cache/
