@@ -5,7 +5,6 @@ Catatan: Test yang butuh ffmpeg binary di-skip otomatis jika ffmpeg tidak tersed
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 from unittest.mock import patch
 
