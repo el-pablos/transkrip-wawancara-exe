@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.core.engines.base import BaseEngine, Segment, TranscriptResult, get_available_engines
+from app.core.engines.base import Segment, TranscriptResult, get_available_engines
 
 
 class TestSegment:
