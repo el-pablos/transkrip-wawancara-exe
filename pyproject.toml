@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "transkrip-wawancara"
-version = "0.1.0"
-description = "Tool desktop Windows buat transkrip wawancara/sidang dari audio/video jadi teks — offline-first, caching Redis, auto release."
+name = "gui-voice-to-text"
+version = "0.2.0"
+description = "GUI Voice To Text — transkrip audio/video ke TXT bersih, offline, Windows 10/11, support file panjang."
 requires-python = ">=3.11"
 license = "MIT"
 authors = [

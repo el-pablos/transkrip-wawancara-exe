@@ -1,12 +1,12 @@
-# 🎙️ Transkrip Wawancara — Voice to Text
+# 🎙️ GUI Voice To Text
 
-[![CI](https://github.com/el-pablos/transkrip-wawancara-exe/actions/workflows/ci.yml/badge.svg)](https://github.com/el-pablos/transkrip-wawancara-exe/actions/workflows/ci.yml)
-[![Release](https://github.com/el-pablos/transkrip-wawancara-exe/actions/workflows/release.yml/badge.svg)](https://github.com/el-pablos/transkrip-wawancara-exe/actions/workflows/release.yml)
+[![CI](https://github.com/el-pablos/GUI-Voice-To-Text/actions/workflows/ci.yml/badge.svg)](https://github.com/el-pablos/GUI-Voice-To-Text/actions/workflows/ci.yml)
+[![Release](https://github.com/el-pablos/GUI-Voice-To-Text/actions/workflows/release.yml/badge.svg)](https://github.com/el-pablos/GUI-Voice-To-Text/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![Windows 10/11](https://img.shields.io/badge/platform-Windows%2010%2F11-0078d4.svg)]()
 
-> **Tool desktop Windows buat transkrip wawancara, sidang skripsi, atau rapat dari file audio/video jadi teks, subtitle, dan dokumen — offline-first, caching Redis, auto release `.exe` portable.**
+> **GUI Voice To Text — transkrip audio/video ke TXT bersih, offline, Windows 10/11, support file panjang tanpa limit.**
 
 ---
 
@@ -95,16 +95,16 @@ flowchart TD
 
 ### Opsi 1: Download `.exe` (Paling Gampang)
 
-1. Buka halaman [**Releases**](https://github.com/el-pablos/transkrip-wawancara-exe/releases)
-2. Download `TranskripWawancara.exe`
+1. Buka halaman [**Releases**](https://github.com/el-pablos/GUI-Voice-To-Text/releases)
+2. Download `GUIVoiceToText.exe`
 3. Jalankan — selesai! _(butuh FFmpeg di PATH atau taruh di folder `tools/ffmpeg/`)_
 
 ### Opsi 2: Jalankan dari Source
 
 ```powershell
 # Clone repo
-git clone https://github.com/el-pablos/transkrip-wawancara-exe.git
-cd transkrip-wawancara-exe
+git clone https://github.com/el-pablos/GUI-Voice-To-Text.git
+cd GUI-Voice-To-Text
 
 # Buat virtual environment
 python -m venv .venv

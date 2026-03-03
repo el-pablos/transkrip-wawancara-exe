@@ -68,7 +68,7 @@ class MainWindow(QMainWindow):
         self.state = AppState()
         self._threads: list[QThread] = []
 
-        self.setWindowTitle("Transkrip Wawancara — Voice to Text")
+        self.setWindowTitle("GUI Voice To Text")
         self.setMinimumSize(700, 600)
 
         self._setup_ui()
