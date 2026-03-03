@@ -22,6 +22,10 @@ class AppState:
     remove_filler: bool = False
     diarization_mode: str = "none"  # none / heuristic
 
+    # TXT options (default bersih)
+    txt_include_timestamps: bool = False
+    txt_include_speaker: bool = False
+
     # Progress
     is_processing: bool = False
     current_stage: str = ""
