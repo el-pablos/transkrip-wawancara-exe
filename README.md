@@ -10,6 +10,19 @@
 
 ---
 
+## 🆕 What's New (v0.2)
+
+- **UI modern**: layout splitter, file table, tab Pengaturan / Preview TXT / Log
+- **Tema dark & light**: toggle satu klik, default dark
+- **Preview TXT**: lihat hasil transkrip langsung di app, bisa copy / save as
+- **TXT bersih**: output default tanpa timestamp & speaker — opsi ada di Pengaturan
+- **Auto-chunking**: file panjang (>20 menit / >200 MB) dipotong otomatis per 10 menit
+- **Tanpa limit**: timeout FFmpeg dinamis berdasarkan durasi file
+- **Model reuse**: engine Whisper lazy-load dan reuse model antar chunk
+- **Windowed EXE**: `.exe` tidak menampilkan console window
+
+---
+
 ## 📋 Untuk Siapa?
 
 - **Mahasiswa** yang butuh transkrip hasil sidang skripsi / wawancara penelitian
@@ -28,44 +41,51 @@
 | 🧠 **Offline-first** | Pakai [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — tidak butuh internet |
 | 🗣️ **Speaker label** | Heuristic diarization (pemisahan speaker otomatis berdasarkan jeda) |
 | 🗄️ **Redis caching** | File yang sama tidak ditranskrip ulang (hemat waktu) |
-| 🖥️ **GUI Desktop** | PySide6 UI — drag & drop, progress bar, konfigurasi visual |
+| 🖥️ **GUI Desktop** | PySide6 UI — drag & drop, file table, progress bar, konfigurasi visual |
+| 🌗 **Tema Dark / Light** | Toggle tema gelap-terang dengan satu klik |
+| 📋 **Preview TXT** | Tab preview hasil transkripsi langsung di app — bisa copy / save as |
+| 🔀 **Auto-chunking** | File panjang (>20 menit / >200 MB) otomatis dipotong per 10 menit |
+| ♾️ **Tanpa limit** | Tidak ada batasan ukuran / durasi file — timeout FFmpeg dinamis |
 | ⌨️ **CLI batch** | Proses banyak file sekaligus lewat terminal |
 | 🧹 **Text cleanup** | Normalisasi spasi, hapus noise token, opsi hapus filler (eee, anu) |
-| ⏱️ **Timestamp** | Per kalimat / per segmen |
-| 📦 **Portable .exe** | Download 1 file, langsung jalankan — tanpa install Python |
+| ⏱️ **Timestamp** | Per kalimat / per segmen (opsional di TXT — default: teks bersih) |
+| 📦 **Portable .exe** | Download 1 file, langsung jalankan — windowed, tanpa console |
 
 ---
 
 ## 🏗️ Arsitektur
 
 ```
-transkrip-wawancara/
+gui-voice-to-text/
 ├── app/
-│   ├── main.py                    # Entry point UI (PySide6)
+│   ├── main.py                    # Entry point UI (PySide6 + High DPI)
 │   ├── cli.py                     # Entry point CLI (argparse)
 │   ├── core/
 │   │   ├── hashing.py             # SHA256 hash file + cache key
-│   │   ├── ffmpeg.py              # FFmpeg detect, probe, convert
+│   │   ├── ffmpeg.py              # FFmpeg detect, probe, convert (timeout dinamis)
 │   │   ├── cache.py               # Redis cache (env-based, fallback aman)
-│   │   ├── pipeline.py            # Orchestrator: convert → cache → transcribe → export
+│   │   ├── chunking.py            # Auto-split file panjang jadi chunk 10 menit
+│   │   ├── pipeline.py            # Orchestrator: convert → chunk → transcribe → export
 │   │   ├── engines/
 │   │   │   ├── base.py            # Interface BaseEngine + TranscriptResult
-│   │   │   ├── faster_whisper.py  # Default: faster-whisper (CTranslate2)
+│   │   │   ├── faster_whisper.py  # Default: faster-whisper (model reuse, lazy init)
 │   │   │   └── vosk_engine.py     # Fallback: Vosk (ringan)
 │   │   ├── exporters/
-│   │   │   ├── txt.py, md.py, srt.py, vtt.py
+│   │   │   ├── txt.py             # TXT bersih (tanpa timestamp/speaker by default)
+│   │   │   ├── md.py, srt.py, vtt.py
 │   │   │   ├── json_export.py, docx_export.py
 │   │   └── postprocess/
 │   │       ├── cleanup.py         # Normalisasi teks, hapus noise/filler
 │   │       └── segmentation.py    # Merge segmen, heuristic diarization
 │   └── ui/
-│       ├── window.py              # MainWindow PySide6
-│       ├── widgets.py             # FileDropZone, ConfigPanel, ProgressPanel
+│       ├── window.py              # MainWindow — QSplitter + QTabWidget layout
+│       ├── widgets.py             # FileDropZone, FileTable, ConfigPanel, PreviewPanel
+│       ├── theme.py               # Sistem tema dark/light (QSS)
 │       └── state.py               # AppState centralized
-├── tests/                         # pytest — 96 tests, 100% passed
+├── tests/                         # pytest — 100+ tests, 100% passed
 ├── .github/workflows/
 │   ├── ci.yml                     # Test + lint otomatis
-│   └── release.yml                # Build .exe + auto release + tagging
+│   └── release.yml                # Build .exe windowed + auto release
 ├── pyproject.toml
 ├── .env.example
 └── .gitignore
@@ -81,12 +101,18 @@ flowchart TD
     B --> C[🔑 Hitung SHA256 hash file]
     C --> D{🗄️ Redis cache hit?}
     D -- Ya --> E[📋 Ambil transkrip dari cache]
-    D -- Tidak --> F[🧠 STT Engine: faster-whisper]
-    F --> G[🧹 Postprocess: cleanup + segmentasi]
-    G --> H[💾 Simpan hasil ke Redis cache]
-    E --> I[📄 Export: TXT / MD / SRT / VTT / JSON / DOCX]
-    H --> I
-    I --> J[✅ Selesai — buka folder output]
+    D -- Tidak --> F{📐 File > 20 menit?}
+    F -- Ya --> G[🔀 Auto-chunk per 10 menit]
+    G --> H[🧠 STT Engine: faster-whisper per chunk]
+    F -- Tidak --> I[🧠 STT Engine: faster-whisper]
+    H --> J[🔗 Merge semua segmen + offset timestamp]
+    I --> K[🧹 Postprocess: cleanup + segmentasi]
+    J --> K
+    K --> L[💾 Simpan hasil ke Redis cache]
+    E --> M[📄 Export: TXT / MD / SRT / VTT / JSON / DOCX]
+    L --> M
+    M --> N[👁️ Preview TXT di tab app]
+    N --> O[✅ Selesai — buka folder output]
 ```
 
 ---
@@ -178,7 +204,7 @@ python -m pytest --cov=app --cov-report=term-missing
 python -m pytest tests/test_hashing.py -v
 ```
 
-**Status: 96 tests passed, 2 skipped (butuh ffmpeg + fixture besar)**
+**Status: 100+ tests passed, 2 skipped (butuh ffmpeg + fixture besar)**
 
 ---
 
