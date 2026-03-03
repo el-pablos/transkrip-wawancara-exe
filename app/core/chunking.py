@@ -107,7 +107,7 @@ def iterate_audio_chunks(
             # Cek apakah file terbuat walau return code error (bisa terjadi di akhir file)
             if not chunk_path.exists() or chunk_path.stat().st_size == 0:
                 break
-        
+
         if chunk_path.exists() and chunk_path.stat().st_size > 0:
             chunks.append(chunk_path)
             logger.info("Chunk %d: offset=%.1fs, path=%s", chunk_index, offset, chunk_path)
