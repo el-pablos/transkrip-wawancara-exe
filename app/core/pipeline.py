@@ -1,4 +1,4 @@
-"""Pipeline orchestrator — convert → cache check → transcribe → postprocess → export."""
+"""Pipeline orchestrator — convert → cache check → transcribe (+ chunking) → postprocess → export."""
 
 from __future__ import annotations
 
@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 from app.core.cache import get_cache, set_cache
-from app.core.engines.base import BaseEngine, TranscriptResult
+from app.core.chunking import cleanup_chunks, iterate_audio_chunks, should_chunk
+from app.core.engines.base import BaseEngine, Segment, TranscriptResult
 from app.core.exporters.json_export import export_json
 from app.core.exporters.md import export_md
 from app.core.exporters.srt import export_srt
@@ -73,8 +74,10 @@ def run_pipeline(
     diarization_mode: str = "none",
     engine: BaseEngine | None = None,
     progress_callback: Callable[[str, float], None] | None = None,
+    txt_include_timestamps: bool = False,
+    txt_include_speaker: bool = False,
 ) -> dict[str, Any]:
-    """Jalankan pipeline transkrip end-to-end.
+    """Jalankan pipeline transkrip end-to-end (dengan chunking untuk file panjang).
 
     Args:
         input_path: Path ke file audio/video.
@@ -87,9 +90,11 @@ def run_pipeline(
         diarization_mode: "none" / "heuristic" / "advanced".
         engine: STT engine instance. None = auto-detect.
         progress_callback: Callback (stage, progress_0_to_1).
+        txt_include_timestamps: Sertakan timestamp di output TXT.
+        txt_include_speaker: Sertakan label speaker di output TXT.
 
     Returns:
-        Dict berisi info hasil: exported_files, duration, cached, dll.
+        Dict berisi info hasil: exported_files, duration, cached, preview_text, dll.
     """
     if formats is None:
         formats = ["txt"]
@@ -140,16 +145,62 @@ def run_pipeline(
         except Exception:
             duration = 0.0
 
-        # Step 5: Transcribe
+        # Step 5: Transcribe (dengan chunking jika file panjang)
         _notify(progress_callback, "Mentranskrip audio...", 0.25)
         if engine is None:
             engine = _get_default_engine()
 
-        result = engine.transcribe(
-            audio_path=str(wav_path),
-            language=language,
-            model_size=model_size,
-        )
+        file_size = input_path.stat().st_size if input_path.exists() else 0
+        if should_chunk(duration, file_size):
+            # ── Chunking path ────────────────────────
+            logger.info("File panjang (%.1f detik) — pakai chunking", duration)
+            chunks = iterate_audio_chunks(wav_path, total_duration=duration)
+            all_segments: list[Segment] = []
+            total_chunks = len(chunks) if chunks else 1
+
+            for ci, chunk_path in enumerate(chunks):
+                chunk_progress = 0.25 + (ci / total_chunks) * 0.40
+                _notify(progress_callback, f"Transkrip chunk {ci + 1}/{total_chunks}...", chunk_progress)
+
+                # Check cache per chunk
+                chunk_ck = cache_key(file_hash + f"_chunk{ci}", language, model_size, diarization_mode != "none")
+                chunk_cached = get_cache(chunk_ck) if use_cache else None
+
+                if chunk_cached:
+                    chunk_result = TranscriptResult.from_dict(chunk_cached)
+                else:
+                    chunk_result = engine.transcribe(
+                        audio_path=str(chunk_path),
+                        language=language,
+                        model_size=model_size,
+                    )
+                    if use_cache:
+                        set_cache(chunk_ck, chunk_result.to_dict())
+
+                # Offset segment timestamps sesuai posisi chunk
+                from app.core.chunking import DEFAULT_CHUNK_SECONDS
+                offset = ci * DEFAULT_CHUNK_SECONDS
+                for seg in chunk_result.segments:
+                    seg.start += offset
+                    seg.end += offset
+                    all_segments.append(seg)
+
+            cleanup_chunks(chunks)
+
+            result = TranscriptResult(
+                segments=all_segments,
+                language=language,
+                duration=duration,
+                engine_name=engine.name,
+                model_name=model_size,
+            )
+        else:
+            # ── Normal path (file pendek) ────────────
+            result = engine.transcribe(
+                audio_path=str(wav_path),
+                language=language,
+                model_size=model_size,
+            )
 
         if duration > 0 and result.duration == 0:
             result.duration = duration
@@ -162,7 +213,7 @@ def run_pipeline(
         if diarization_mode == "heuristic":
             result = heuristic_diarization(result)
 
-        # Step 7: Cache set
+        # Step 7: Cache set (whole file)
         if use_cache:
             set_cache(ck, result.to_dict())
 
@@ -184,9 +235,20 @@ def run_pipeline(
             logger.warning("Format '%s' tidak didukung, skip.", fmt)
             continue
         out_file = output_dir / f"{stem}.{fmt}"
-        EXPORTERS[fmt](result, out_file)
+        if fmt == "txt":
+            export_txt(
+                result,
+                out_file,
+                include_timestamps=txt_include_timestamps,
+                include_speaker=txt_include_speaker,
+            )
+        else:
+            EXPORTERS[fmt](result, out_file)
         exported_files.append(str(out_file))
         logger.info("Exported: %s", out_file)
+
+    # Generate preview text (TXT bersih)
+    preview_text = result.full_text
 
     _notify(progress_callback, "Selesai!", 1.0)
 
@@ -200,6 +262,7 @@ def run_pipeline(
         "language": result.language,
         "engine": result.engine_name,
         "model": result.model_name,
+        "preview_text": preview_text,
     }
 
 
